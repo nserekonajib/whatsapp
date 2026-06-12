@@ -1,0 +1,13 @@
+node_modules
+__pycache__
+*.pyc
+*.log
+.git
+.gitignore
+README.md
+.vscode
+.idea
+auth_info_baileys
+whatsapp-sessions
+*.md
+.env.local

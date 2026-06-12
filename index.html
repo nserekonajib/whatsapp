@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capital College WhatsApp Bot Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #075E54 0%, #128C7E 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .qr-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        
+        .qr-section h2 {
+            color: #075E54;
+            margin-bottom: 20px;
+        }
+        
+        #qr-code {
+            display: inline-block;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.scanning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        
+        .status.connecting {
+            background: #cce5ff;
+            color: #004085;
+            border: 1px solid #b8daff;
+        }
+        
+        .messages-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .messages-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .messages-header h2 {
+            color: #075E54;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #075E54 0%, #128C7E 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-card h4 {
+            font-size: 0.8em;
+            opacity: 0.9;
+        }
+        
+        .stat-card p {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .message-list {
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        
+        .message-item {
+            background: #f8f9fa;
+            border-left: 4px solid #25D366;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+        
+        .message-from {
+            font-weight: bold;
+            color: #075E54;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        
+        .message-body {
+            color: #333;
+            margin-bottom: 8px;
+            word-wrap: break-word;
+        }
+        
+        .message-response {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 8px;
+            color: #495057;
+            white-space: pre-wrap;
+        }
+        
+        .message-time {
+            font-size: 0.75em;
+            color: #6c757d;
+            margin-top: 8px;
+        }
+        
+        .send-message {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+        
+        .send-message h3 {
+            margin-bottom: 15px;
+            color: #075E54;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #075E54 0%, #128C7E 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message-item {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .no-messages {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Capital College WhatsApp Bot</h1>
+            <p>Manage your WhatsApp Business integration</p>
+        </div>
+        
+        <div class="qr-section">
+            <h2>📲 Scan QR Code to Connect</h2>
+            <div id="qr-code">
+                <div style="color: #999;">Waiting for QR code...</div>
+            </div>
+            <div id="status" class="status connecting">🟡 Connecting - Starting bot...</div>
+            <div style="margin-top: 15px; font-size: 12px; color: #666;">
+                💡 Open WhatsApp → Settings → Linked Devices → Link a Device
+            </div>
+        </div>
+        
+        <div class="messages-section">
+            <div class="messages-header">
+                <h2>💬 Recent Messages</h2>
+                <div class="stats">
+                    <div class="stat-card">
+                        <h4>Connected</h4>
+                        <p id="connection-status">❌</p>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Messages</h4>
+                        <p id="message-count">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="message-list" class="message-list">
+                <div class="no-messages">💬 No messages yet. Messages will appear here when users contact the bot.</div>
+            </div>
+            
+            <div class="send-message">
+                <h3>📤 Send Message</h3>
+                <div class="form-group">
+                    <label>Phone Number (with country code, e.g., 256XXXXXXXXX)</label>
+                    <input type="text" id="phone-number" placeholder="256XXXXXXXXX">
+                </div>
+                <div class="form-group">
+                    <label>Message</label>
+                    <textarea id="message-text" placeholder="Type your message here..."></textarea>
+                </div>
+                <button onclick="sendMessage()">Send Message</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let messageCount = 0;
+        
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+        });
+        
+        socket.on('qr', (qrData) => {
+            console.log('QR Code received');
+            const qrContainer = document.getElementById('qr-code');
+            qrContainer.innerHTML = `<img src="${qrData}" style="width: 200px; height: 200px;" alt="QR Code">`;
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status scanning';
+            statusDiv.innerHTML = '🟡 Scanning - Please scan QR code with WhatsApp';
+            document.getElementById('connection-status').innerHTML = '🟡';
+        });
+        
+        socket.on('ready', (message) => {
+            console.log('Client ready:', message);
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status connected';
+            statusDiv.innerHTML = '🟢 Connected - Bot is ready to receive messages!';
+            document.getElementById('connection-status').innerHTML = '✅';
+            
+            const qrContainer = document.getElementById('qr-code');
+            qrContainer.innerHTML = '<div style="color: #25D366; font-weight: bold;">✅ Connected successfully!</div>';
+        });
+        
+        socket.on('disconnected', (message) => {
+            console.log('Disconnected:', message);
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status disconnected';
+            statusDiv.innerHTML = '🔴 Disconnected - Please refresh to reconnect';
+            document.getElementById('connection-status').innerHTML = '❌';
+        });
+        
+        socket.on('authenticated', (message) => {
+            console.log('Authenticated:', message);
+        });
+        
+        socket.on('auth_failure', (message) => {
+            console.error('Auth failure:', message);
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status disconnected';
+            statusDiv.innerHTML = '🔴 Authentication failed - Please restart';
+        });
+        
+        socket.on('new_message', (data) => {
+            console.log('New message:', data);
+            addMessageToUI(data);
+            messageCount++;
+            document.getElementById('message-count').innerText = messageCount;
+        });
+        
+        function addMessageToUI(data) {
+            const messageList = document.getElementById('message-list');
+            
+            // Remove no messages placeholder if exists
+            if (messageList.children.length === 1 && messageList.children[0].classList?.contains('no-messages')) {
+                messageList.innerHTML = '';
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-item';
+            
+            const timestamp = new Date(data.timestamp).toLocaleString();
+            const fromDisplay = data.from.includes('@') ? data.from.split('@')[0] : data.from;
+            
+            messageDiv.innerHTML = `
+                <div class="message-from">📱 From: ${fromDisplay}</div>
+                <div class="message-body"><strong>Message:</strong> ${escapeHtml(data.body)}</div>
+                <div class="message-response"><strong>Bot Response:</strong> ${escapeHtml(data.response)}</div>
+                <div class="message-time">🕐 ${timestamp}</div>
+            `;
+            
+            messageList.insertBefore(messageDiv, messageList.firstChild);
+            
+            // Keep only last 50 messages
+            while (messageList.children.length > 50) {
+                messageList.removeChild(messageList.lastChild);
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        async function sendMessage() {
+            const phoneNumber = document.getElementById('phone-number').value;
+            const message = document.getElementById('message-text').value;
+            
+            if (!phoneNumber || !message) {
+                alert('Please fill in both phone number and message');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        number: phoneNumber,
+                        message: message
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Message sent successfully!');
+                    document.getElementById('message-text').value = '';
+                } else {
+                    alert('❌ Failed to send message: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Error sending message. Please check if the server is running.');
+            }
+        }
+        
+        // Check status periodically
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                if (status.ready) {
+                    const statusDiv = document.getElementById('status');
+                    if (!statusDiv.classList.contains('connected')) {
+                        statusDiv.className = 'status connected';
+                        statusDiv.innerHTML = '🟢 Connected - Bot is ready to receive messages!';
+                        document.getElementById('connection-status').innerHTML = '✅';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+        }
+        
+        setInterval(checkStatus, 30000);
+        checkStatus();
+    </script>
+</body>
+</html>

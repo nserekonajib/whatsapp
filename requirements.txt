@@ -1,0 +1,10 @@
+Flask
+flask-socketio
+flask-cors
+python-socketio
+requests
+eventlet
+qrcode
+Pillow
+supabase
+python-dotenv
