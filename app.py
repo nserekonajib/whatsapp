@@ -19,7 +19,7 @@ CORS(app)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-NODE_SERVER = "http://localhost:3000"
+NODE_SERVER = "https://whatsapp-jgoj.onrender.com"
 
 # Initialize Supabase client
 supabase_url = os.getenv('SUPABASE_URL')
