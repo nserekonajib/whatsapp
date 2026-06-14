@@ -441,6 +441,9 @@
             <div class="button-group">
                 <button id="disconnectBtn" class="disconnect-btn" onclick="confirmDisconnect()" style="display: none;">🔴 Disconnect & Logout</button>
             </div>
+<br>
+
+            <button id="requestQrBtn" class="refresh-btn" onclick="requestNewQR()" style="background: #17a2b8;">🔄 Request New QR Code</button>
             <div class="instructions">
                 <strong>📖 How to connect:</strong><br>
                 1. Open WhatsApp on your phone<br>
@@ -817,6 +820,45 @@
                 modal.style.display = 'none';
             }
         }
+
+        async function requestNewQR() {
+    const btn = document.getElementById('requestQrBtn');
+    btn.disabled = true;
+    btn.textContent = 'Requesting...';
+    
+    try {
+        const response = await fetch('/api/request-qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ New QR code requested! Please scan the new QR code.');
+            // Reset UI
+            document.getElementById('status').className = 'status scanning';
+            document.getElementById('status').innerHTML = '🟡 New QR code requested - Please scan';
+            document.getElementById('connection-status').innerHTML = '🟡';
+            
+            // Clear QR container
+            const qrContainer = document.getElementById('qr-container');
+            qrContainer.innerHTML = '<div class="spinner"></div><div style="margin-top: 10px;">Generating new QR code...</div>';
+            
+            // Refresh after 3 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } else {
+            alert('❌ Failed: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Request New QR Code';
+    }
+}
     </script>
 </body>
 </html>

@@ -83,7 +83,6 @@ async function syncToSupabase() {
       const filePath = path.join(AUTH_FOLDER, filename);
       const content = fs.readFileSync(filePath, 'utf-8');
       
-      // Upsert
       const { error } = await supabase
         .from('whatsapp_auth_files')
         .upsert({ filename, content, updated_at: new Date().toISOString() }, { onConflict: 'filename' });
@@ -95,6 +94,38 @@ async function syncToSupabase() {
   } catch (error) {
     console.error('Sync error:', error.message);
   }
+}
+
+// Function to clear all auth data (for new QR request)
+async function clearAuthData() {
+  console.log('🗑️ Clearing auth data for new QR...');
+  
+  // Close existing connection
+  if (sock) {
+    try {
+      await sock.logout();
+      sock.end();
+    } catch(e) {}
+    sock = null;
+  }
+  
+  // Delete local auth folder
+  if (fs.existsSync(AUTH_FOLDER)) {
+    fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+    fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+  }
+  
+  // Delete from Supabase
+  if (supabase) {
+    await supabase.from('whatsapp_auth_files').delete().neq('id', 0);
+  }
+  
+  // Reset states
+  isClientReady = false;
+  currentQR = null;
+  reconnectAttempts = 0;
+  
+  console.log('✅ Auth data cleared');
 }
 
 // OpenRouter AI Client
@@ -144,7 +175,7 @@ class OpenRouterClient {
 const conversationHistory = new Map();
 const messageStore = new Map();
 
-// College Data
+// College Data (only active options)
 const collegeData = {
   aboutCCAM: {
     mission: "To empower accountants with knowledge and skills to succeed as lifelong professionals in a global world.",
@@ -239,8 +270,6 @@ const menuOptions = {
   "4": "Registration",
   "5": "Payments",
   "6": "Revision",
-  // "7": "Class modulation",
-  // "8": "FAQs",
   "7": "ICPAU inquiry"
 };
 
@@ -271,14 +300,10 @@ function getMenuResponse(option) {
       paymentResponse += `Level 4: UGX ${collegeData.payments.fees.level4.toLocaleString()}/=\n\n`;
       paymentResponse += "*PAYMENT OPTIONS:*\n";
       collegeData.payments.options.forEach(opt => { paymentResponse += `• ${opt}\n`; });
-      paymentResponse += `Contact admin: ${collegeData.contact.phone}\nWebsite: ${collegeData.contact.website}`;
+      paymentResponse += `\n📞 Contact: ${collegeData.contact.phone}`;
       return paymentResponse;
     case "6":
       return `*📚 REVISION*\n\nContact: ${collegeData.revision.contact}\n\n${collegeData.revision.method}`;
-    // case "7":
-    //   return `*🎓 CLASS MODULATION*\n\n${collegeData.programs.description}\n\n*EVENING:* ${collegeData.programs.evening}\n*WEEKEND:* Saturday ${collegeData.programs.weekend.saturday}, Sunday ${collegeData.programs.weekend.sunday}`;
-    // case "8":
-    //   return `*❓ FAQs*\n\nContact admin: ${collegeData.contact.phone}\nWebsite: ${collegeData.contact.website}`;
     case "7":
       let icpauResponse = "*🏛️ ICPAU FEES*\n\n";
       icpauResponse += `Registration: UGX ${collegeData.ICPAU.registrationFees.toLocaleString()}/= (paid once)\n`;
@@ -386,7 +411,6 @@ async function connectToWhatsApp() {
           isClientReady = false;
           io.emit('disconnected', 'Logged out');
           
-          // Clear auth folder on logout
           if (fs.existsSync(AUTH_FOLDER)) {
             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
             fs.mkdirSync(AUTH_FOLDER, { recursive: true });
@@ -421,7 +445,7 @@ async function connectToWhatsApp() {
       let response;
       
       if (userMessageLower === 'hi' || userMessageLower === 'hello' || userMessageLower === 'hey') {
-        response = `*🎓 Welcome to Capital College!*\n\nSelect an option:\n\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ Class modulation\n8️⃣ FAQs\n9️⃣ ICPAU inquiry\n\nOr type your question. 🤝\n\n📞 Contact: ${collegeData.contact.phone}`;
+        response = `*🎓 Welcome to Capital College!*\n\nSelect an option:\n\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ ICPAU inquiry\n\nOr type your question. 🤝\n\n📞 Contact: ${collegeData.contact.phone}`;
       } 
       else if (menuOptions[userMessageLower]) {
         response = getMenuResponse(userMessageLower);
@@ -429,7 +453,7 @@ async function connectToWhatsApp() {
       else {
         const history = await getLastMessages(userId, 6);
         const aiResponse = await getAIResponse(userMessage, history);
-        response = aiResponse || `Please type a number from the menu:\n\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ Class modulation\n8️⃣ FAQs\n9️⃣ ICPAU inquiry`;
+        response = aiResponse || `Please type a number from the menu:\n\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ ICPAU inquiry`;
       }
       
       if (response) {
@@ -470,30 +494,21 @@ app.post('/api/send', async (req, res) => {
 
 app.post('/api/logout', async (req, res) => {
   try {
-    if (sock) {
-      await sock.logout();
-      sock.end();
-      sock = null;
-    }
-    
-    // Delete local auth folder
-    if (fs.existsSync(AUTH_FOLDER)) {
-      fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-      fs.mkdirSync(AUTH_FOLDER, { recursive: true });
-    }
-    
-    // Delete from Supabase
-    if (supabase) {
-      await supabase.from('whatsapp_auth_files').delete().neq('id', 0);
-    }
-    
-    isClientReady = false;
-    currentQR = null;
-    messageStore.clear();
-    conversationHistory.clear();
-    
+    await clearAuthData();
     io.emit('disconnected', 'Logged out');
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/request-qr', async (req, res) => {
+  try {
+    console.log('🔄 New QR requested...');
+    await clearAuthData();
+    // Reconnect to generate new QR
+    setTimeout(() => connectToWhatsApp(), 1000);
+    res.json({ success: true, message: 'New QR code will be generated' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
