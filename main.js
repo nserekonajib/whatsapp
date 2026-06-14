@@ -239,9 +239,9 @@ const menuOptions = {
   "4": "Registration",
   "5": "Payments",
   "6": "Revision",
-  "7": "Class modulation",
-  "8": "FAQs",
-  "9": "ICPAU inquiry"
+  // "7": "Class modulation",
+  // "8": "FAQs",
+  "7": "ICPAU inquiry"
 };
 
 function getMenuResponse(option) {
@@ -271,14 +271,15 @@ function getMenuResponse(option) {
       paymentResponse += `Level 4: UGX ${collegeData.payments.fees.level4.toLocaleString()}/=\n\n`;
       paymentResponse += "*PAYMENT OPTIONS:*\n";
       collegeData.payments.options.forEach(opt => { paymentResponse += `• ${opt}\n`; });
+      paymentResponse += `Contact admin: ${collegeData.contact.phone}\nWebsite: ${collegeData.contact.website}`;
       return paymentResponse;
     case "6":
       return `*📚 REVISION*\n\nContact: ${collegeData.revision.contact}\n\n${collegeData.revision.method}`;
+    // case "7":
+    //   return `*🎓 CLASS MODULATION*\n\n${collegeData.programs.description}\n\n*EVENING:* ${collegeData.programs.evening}\n*WEEKEND:* Saturday ${collegeData.programs.weekend.saturday}, Sunday ${collegeData.programs.weekend.sunday}`;
+    // case "8":
+    //   return `*❓ FAQs*\n\nContact admin: ${collegeData.contact.phone}\nWebsite: ${collegeData.contact.website}`;
     case "7":
-      return `*🎓 CLASS MODULATION*\n\n${collegeData.programs.description}\n\n*EVENING:* ${collegeData.programs.evening}\n*WEEKEND:* Saturday ${collegeData.programs.weekend.saturday}, Sunday ${collegeData.programs.weekend.sunday}`;
-    case "8":
-      return `*❓ FAQs*\n\nContact admin: ${collegeData.contact.phone}\nWebsite: ${collegeData.contact.website}`;
-    case "9":
       let icpauResponse = "*🏛️ ICPAU FEES*\n\n";
       icpauResponse += `Registration: UGX ${collegeData.ICPAU.registrationFees.toLocaleString()}/= (paid once)\n`;
       icpauResponse += `Annual Subscription: UGX ${collegeData.ICPAU.annualSubscription.toLocaleString()}/=\n\n`;
