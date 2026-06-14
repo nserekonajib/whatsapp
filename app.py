@@ -19,7 +19,8 @@ CORS(app)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-NODE_SERVER = "https://whatsapp-1-23fp.onrender.com/"
+# NODE_SERVER = "https://whatsapp-1-23fp.onrender.com"
+NODE_SERVER = os.getenv('NODE_SERVER', 'http://localhost:3000')
 
 # Initialize Supabase client
 supabase_url = os.getenv('SUPABASE_URL')
@@ -33,10 +34,10 @@ else:
     print("⚠️ Supabase not configured")
 
 # Global variables
-messages = []
 current_qr_string = None
 current_qr_image = None
 is_connected = False
+last_status = None
 
 def generate_qr_image(qr_string):
     """Generate QR code image from string"""
@@ -61,18 +62,10 @@ def index():
 
 @app.route('/api/status')
 def get_status():
-    global current_qr_string, current_qr_image
-    
+    """Only return status without generating QR"""
     try:
         response = requests.get(f"{NODE_SERVER}/api/status", timeout=2)
-        data = response.json()
-        
-        if data.get('qrCode') and data.get('qrCode') != current_qr_string:
-            current_qr_string = data.get('qrCode')
-            current_qr_image = generate_qr_image(current_qr_string)
-            socketio.emit('qr', current_qr_image)
-        
-        return jsonify(data)
+        return jsonify(response.json())
     except Exception as e:
         return jsonify({'ready': False, 'qrCode': None, 'error': str(e)})
 
@@ -228,13 +221,15 @@ def poll_node_updates():
             if resp.status_code == 200:
                 data = resp.json()
                 
+                # Only generate QR if new and not sent
                 if data.get('qrCode') and data.get('qrCode') != current_qr_string:
                     current_qr_string = data.get('qrCode')
                     current_qr_image = generate_qr_image(current_qr_string)
                     if current_qr_image:
                         socketio.emit('qr', current_qr_image)
-                        print("📱 New QR code sent to web interface")
+                        print("📱 QR code sent to web")
                 
+                # Update connection status only when changed
                 if data.get('ready') != is_connected:
                     is_connected = data.get('ready')
                     if is_connected:
@@ -246,8 +241,10 @@ def poll_node_updates():
         except Exception as e:
             pass
         
-        time.sleep(2)
+        # Poll every 5 seconds instead of 2
+        time.sleep(5)
 
+# Start background thread
 thread = Thread(target=poll_node_updates, daemon=True)
 thread.start()
 
@@ -256,6 +253,6 @@ if __name__ == '__main__':
     print("🚀 WhatsApp Bot Manager Starting...")
     print("="*50)
     print("📱 Flask Server: http://localhost:5000")
-    print("🔗 Make sure Node.js server is running on port 3000")
+    print("🔗 Node.js server:", NODE_SERVER)
     print("="*50 + "\n")
     socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
