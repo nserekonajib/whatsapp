@@ -111,7 +111,7 @@ const collegeData = {
   registration: { onlineLink: "https://capitalcollege.ac.ug/student-registration-2/", physicalLocation: "At the office" },
   payments: { fees: { level1: 220000, level2: 250000, level3: 250000, level4: 300000 }, options: ["Cash at College", "DTB Bank A/C 0071144001", "MTN & Airtel Mobile Money via School Pay"] },
   revision: { contact: "0783933012 / 0757126551", method: "Contact admin or engage your tutor in the WhatsApp group" },
-  ICPAU: { registrationFees: 150000, annualSubscription: 120000, paperCosts: { level1: { normal: 110000, late: 165000 }, level2: { normal: 120000, late: 180000 }, level3: { normal: 125000, late: 187500 }, level4: { normal: 330000, late: 495000 } } },
+  ICPAU: { registrationFees: 160000, annualSubscription: 130000, paperCosts: { level1: { normal: 115000, late: 172500 }, level2: { normal: 125000, late: 187500 }, level3: { normal: 135000, late: 202500 }, level4: { normal: 330000, late: 495000 } } },
   contact: { phone: "0783933012 / 0757126551", website: "https://capitalcollege.ac.ug" }
 };
 
