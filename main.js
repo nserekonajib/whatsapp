@@ -6,8 +6,6 @@ const http = require('http');
 const socketIO = require('socket.io');
 const { createClient } = require('@supabase/supabase-js');
 const P = require('pino');
-const { Boom } = require('@hapi/boom');
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -86,29 +84,6 @@ async function clearAuthData() {
   qrSent = false;
 }
 
-// OpenRouter AI Client
-class OpenRouterClient {
-  constructor(model = "openrouter/free") {
-    this.apiKey = process.env.API;
-    this.url = "https://openrouter.ai/api/v1/chat/completions";
-    this.model = model;
-  }
-  async chat(message, systemPrompt = null, conversationHistory = []) {
-    if (!this.apiKey) return null;
-    const messages = [];
-    if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
-    if (conversationHistory.length > 0) messages.push(...conversationHistory.slice(-6));
-    messages.push({ role: "user", content: message });
-    try {
-      const response = await axios.post(this.url, {
-        model: this.model, messages: messages, max_tokens: 500, temperature: 0.7
-      }, { headers: { Authorization: `Bearer ${this.apiKey}` }, timeout: 30000 });
-      return response.data?.choices?.[0]?.message?.content || null;
-    } catch (error) { return null; }
-  }
-}
-
-const conversationHistory = new Map();
 const messageStore = new Map();
 
 // College Data
@@ -140,7 +115,15 @@ const collegeData = {
   contact: { phone: "0783933012 / 0757126551", website: "https://capitalcollege.ac.ug" }
 };
 
-const menuOptions = { "1": "About CCAM", "2": "Papers taught", "3": "Programs", "4": "Registration", "5": "Payments", "6": "Revision", "7": "ICPAU inquiry" };
+const menuOptions = { 
+  "1": "About CCAM", 
+  "2": "Papers taught", 
+  "3": "Programs", 
+  "4": "Registration", 
+  "5": "Payments", 
+  "6": "Revision", 
+  "7": "ICPAU inquiry" 
+};
 
 function getMenuResponse(option) {
   switch(option) {
@@ -155,15 +138,6 @@ function getMenuResponse(option) {
   }
 }
 
-function getAISystemPrompt() {
-  return `You are a customer service assistant for Capital College. ONLY use this data: ${JSON.stringify(collegeData)}. If asked something not in this data, say "I don't have that information. Please contact admin at ${collegeData.contact.phone}"`;
-}
-
-async function getAIResponse(userMessage, history) {
-  const ai = new OpenRouterClient();
-  return await ai.chat(userMessage, getAISystemPrompt(), history.map(msg => ({ role: msg.role, content: msg.content })));
-}
-
 async function storeMessage(userId, message, response) {
   try {
     if (!messageStore.has(userId)) messageStore.set(userId, []);
@@ -171,11 +145,6 @@ async function storeMessage(userId, message, response) {
     if (messageStore.get(userId).length > 50) messageStore.get(userId).shift();
     if (supabase) await supabase.from('whatsapp_messages').insert([{ user_id: userId, message, response, timestamp: new Date().toISOString() }]);
   } catch(e) {}
-}
-
-async function getLastMessages(userId, limit = 7) {
-  const userMessages = messageStore.get(userId) || [];
-  return userMessages.slice(-limit).map(msg => ({ role: 'user', content: msg.message }));
 }
 
 let sock = null, currentQR = null, isClientReady = false, reconnectAttempts = 0;
@@ -241,15 +210,20 @@ async function connectToWhatsApp() {
       if (!messageText) return;
       const userMessage = messageText.trim().toLowerCase();
       let response;
+      
+      // Check if it's a greeting
       if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey') {
-        response = `🎓 Welcome to Capital College!\n\nSelect an option:\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ ICPAU inquiry\n\nOr type your question. 🤝\n\n📞 Contact: ${collegeData.contact.phone}`;
-      } else if (menuOptions[userMessage]) {
+        response = `🎓 Welcome to Capital College!\n\nPlease select an option by typing the corresponding number:\n\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ ICPAU inquiry\n\n📞 Contact: ${collegeData.contact.phone}`;
+      } 
+      // Check if it's a valid menu option
+      else if (menuOptions[userMessage]) {
         response = getMenuResponse(userMessage);
-      } else {
-        const history = await getLastMessages(sender, 6);
-        const aiResponse = await getAIResponse(messageText, history);
-        response = aiResponse || `Please select an option:\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ ICPAU inquiry`;
+      } 
+      // Invalid selection - show menu again
+      else {
+        response = `❌ Invalid selection. Please type a number from the menu:\n\n1️⃣ About CCAM\n2️⃣ Papers taught\n3️⃣ Programs\n4️⃣ Registration\n5️⃣ Payments\n6️⃣ Revision\n7️⃣ ICPAU inquiry\n\n📞 Contact: ${collegeData.contact.phone}`;
       }
+      
       if (response) { 
         await sock.sendMessage(sender, { text: response }); 
         await storeMessage(sender, messageText, response); 
@@ -286,56 +260,34 @@ app.get('/', (req, res) => {
     <title>Capital College WhatsApp Bot</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
             min-height: 100vh;
             padding: 20px;
-            position: relative;
-            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="3" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="80" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-            pointer-events: none;
-        }
-        
         .container {
-            max-width: 550px;
-            margin: 0 auto;
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.95);
+            max-width: 520px;
+            width: 100%;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(20px);
             border-radius: 30px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
             overflow: hidden;
-            transition: transform 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.2);
         }
-        
-        .container:hover {
-            transform: translateY(-5px);
-        }
-        
         .header {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            padding: 30px;
+            background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+            padding: 25px 30px;
             text-align: center;
             position: relative;
             overflow: hidden;
         }
-        
-        .header::before {
+        .header::after {
             content: '';
             position: absolute;
             top: -50%;
@@ -345,268 +297,124 @@ app.get('/', (req, res) => {
             background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
             animation: shimmer 3s infinite;
         }
-        
         @keyframes shimmer {
             0% { transform: translate(-30%, -30%); }
             100% { transform: translate(30%, 30%); }
         }
-        
-        .header h1 {
-            font-size: 2em;
-            margin-bottom: 5px;
-            color: white;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-        
-        .header p {
-            opacity: 0.9;
-            font-size: 0.9em;
-            color: rgba(255,255,255,0.9);
-        }
-        
+        .header h1 { font-size: 1.8em; color: white; font-weight: 700; position: relative; z-index: 1; }
+        .header p { opacity: 0.9; font-size: 0.85em; color: rgba(255,255,255,0.9); position: relative; z-index: 1; }
         .qr-container {
-            padding: 40px;
+            padding: 35px;
             text-align: center;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
         }
-        
         #qr-code {
             display: inline-block;
             background: white;
             padding: 20px;
             border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
             transition: all 0.3s ease;
         }
-        
-        #qr-code:hover {
-            transform: scale(1.02);
-            box-shadow: 0 15px 50px rgba(0,0,0,0.15);
-        }
-        
-        #qr-code img {
-            width: 200px;
-            height: 200px;
-            display: block;
-            border-radius: 10px;
-        }
-        
+        #qr-code:hover { transform: scale(1.02); box-shadow: 0 15px 50px rgba(0,0,0,0.2); }
+        #qr-code img { width: 200px; height: 200px; display: block; border-radius: 10px; }
         .status {
             text-align: center;
             padding: 12px 20px;
-            margin: 20px;
+            margin: 15px 20px;
             border-radius: 50px;
             font-weight: 600;
-            font-size: 14px;
-            backdrop-filter: blur(5px);
+            font-size: 13px;
             transition: all 0.3s ease;
         }
-        
-        .status.connected {
-            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
-            color: #1e3c72;
-            border: 1px solid rgba(30,60,114,0.2);
-        }
-        
-        .status.disconnected {
-            background: linear-gradient(135deg, #fda4a4 0%, #fbc2c2 100%);
-            color: #721c24;
-            border: 1px solid rgba(114,28,36,0.2);
-        }
-        
-        .status.scanning {
-            background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-            color: #d63031;
-            border: 1px solid rgba(214,48,49,0.2);
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.8; }
-        }
-        
+        .status.connected { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+        .status.disconnected { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+        .status.scanning { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         .button-group {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             padding: 0 20px 20px 20px;
         }
-        
         button {
             flex: 1;
-            padding: 12px 20px;
+            padding: 12px;
             border: none;
             border-radius: 50px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 14px;
+            font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
-        .btn-logout {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-        
-        .btn-logout:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(245,87,108,0.4);
-        }
-        
-        .btn-refresh {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-        }
-        
-        .btn-refresh:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(79,172,254,0.4);
-        }
-        
+        .btn-logout { background: #dc3545; color: white; }
+        .btn-logout:hover { background: #c82333; transform: translateY(-2px); box-shadow: 0 5px 20px rgba(220,53,69,0.4); }
+        .btn-refresh { background: #ff9800; color: white; }
+        .btn-refresh:hover { background: #f57c00; transform: translateY(-2px); box-shadow: 0 5px 20px rgba(255,152,0,0.4); }
         .message-area {
             padding: 0 20px 20px 20px;
             max-height: 350px;
             overflow-y: auto;
-            background: rgba(248, 249, 250, 0.9);
+            background: #fafafa;
             border-top: 1px solid rgba(0,0,0,0.05);
         }
-        
-        .message-area h4 {
-            margin: 15px 0;
-            color: #1e3c72;
-            font-size: 14px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
+        .message-area h4 { margin: 15px 0; color: #0D47A1; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
         .message-item {
             background: white;
             padding: 12px;
             margin: 10px 0;
             border-radius: 15px;
-            border-left: 4px solid #2a5298;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 4px solid #1565C0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             transition: all 0.3s ease;
         }
-        
-        .message-item:hover {
-            transform: translateX(5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .message-from {
-            font-weight: bold;
-            color: #2a5298;
-            margin-bottom: 8px;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .message-text {
-            color: #333;
-            margin-bottom: 8px;
-            word-wrap: break-word;
-            font-size: 13px;
-        }
-        
-        .message-response {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdef5 100%);
-            padding: 10px;
-            border-radius: 12px;
-            margin-top: 8px;
-            color: #1e3c72;
-            font-size: 12px;
-            line-height: 1.5;
-        }
-        
-        .message-time {
-            font-size: 10px;
-            color: #999;
-            margin-top: 8px;
-        }
-        
-        .no-messages {
-            text-align: center;
-            color: #999;
-            padding: 30px;
-            font-size: 13px;
-        }
-        
+        .message-item:hover { transform: translateX(5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .message-from { font-weight: bold; color: #0D47A1; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .message-text { color: #333; margin-bottom: 6px; word-wrap: break-word; font-size: 13px; }
+        .message-response { background: #e3f2fd; padding: 10px; border-radius: 12px; margin-top: 6px; color: #0D47A1; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+        .message-time { font-size: 10px; color: #999; margin-top: 6px; }
+        .no-messages { text-align: center; color: #999; padding: 30px; font-size: 13px; }
         .footer {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            padding: 15px;
+            background: linear-gradient(135deg, #0D47A1 0%, #1565C0 100%);
+            padding: 14px;
             text-align: center;
             font-size: 11px;
-            color: rgba(255,255,255,0.7);
+            color: rgba(255,255,255,0.8);
         }
-        
-        .footer a {
-            color: #ffd700;
-            text-decoration: none;
-            font-weight: 600;
-            transition: color 0.3s ease;
-        }
-        
-        .footer a:hover {
-            color: #fff;
-            text-decoration: underline;
-        }
-        
-        .brand {
-            font-weight: bold;
-            color: #ffd700;
-        }
-        
+        .footer a { color: #ffd700; text-decoration: none; font-weight: 600; transition: color 0.3s; }
+        .footer a:hover { color: #fff; text-decoration: underline; }
+        .brand { font-weight: bold; color: #ffd700; }
         .spinner {
             display: inline-block;
             width: 50px;
             height: 50px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #2a5298;
+            border: 4px solid #e3f2fd;
+            border-top: 4px solid #0D47A1;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .qr-placeholder { width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 15px; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #0D47A1; border-radius: 10px; }
+        .menu-hint {
+            text-align: center;
+            padding: 10px 20px;
+            font-size: 12px;
+            color: #666;
+            background: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
         }
-        
-        .qr-placeholder {
-            width: 200px;
-            height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: white;
-            border-radius: 15px;
-        }
-        
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            border-radius: 10px;
-        }
+        .menu-hint span { font-weight: bold; color: #0D47A1; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🎓 Capital College</h1>
-            <p>WhatsApp AI Assistant | 24/7 Support</p>
+            <p>WhatsApp Bot Assistant</p>
         </div>
         
         <div class="qr-container">
@@ -619,20 +427,24 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="button-group">
-            <button class="btn-refresh" onclick="requestNewQR()">🔄 New QR Code</button>
+            <button class="btn-refresh" onclick="requestNewQR()">🔄 New QR</button>
             <button class="btn-logout" onclick="logout()">🔴 Disconnect</button>
+        </div>
+        
+        <div class="menu-hint">
+            Users type <span>1-7</span> for menu options
         </div>
         
         <div class="message-area">
             <h4>📨 Recent Activity</h4>
             <div id="message-list">
-                <div class="no-messages">No messages yet. Messages will appear here when users interact.</div>
+                <div class="no-messages">No messages yet.</div>
             </div>
         </div>
         
         <div class="footer">
             Powered by <span class="brand">Capital College</span> | 
-            Bot Managed by <a href="https://lunserktechnologies.com" target="_blank">Lunserk Technologies</a>
+            Managed by <a href="https://lunserktechnologies.com" target="_blank">Lunserk Technologies</a>
         </div>
     </div>
     
@@ -654,15 +466,15 @@ app.get('/', (req, res) => {
         socket.on('ready', () => {
             const statusDiv = document.getElementById('status');
             statusDiv.className = 'status connected';
-            statusDiv.innerHTML = '✅ Connected - Bot is ready to respond!';
+            statusDiv.innerHTML = '✅ Connected - Bot is ready!';
             const qrContainer = document.getElementById('qr-code');
-            qrContainer.innerHTML = '<div style="padding: 30px; text-align: center;">✅<br><span style="font-size: 12px;">Connected Successfully!</span></div>';
+            qrContainer.innerHTML = '<div style="padding: 30px; text-align: center;">✅<br><span style="font-size: 12px;">Connected</span></div>';
         });
         
         socket.on('disconnected', () => {
             const statusDiv = document.getElementById('status');
             statusDiv.className = 'status disconnected';
-            statusDiv.innerHTML = '❌ Disconnected - Click New QR Code to reconnect';
+            statusDiv.innerHTML = '❌ Disconnected';
             const qrContainer = document.getElementById('qr-code');
             qrContainer.innerHTML = '<div class="qr-placeholder"><div class="spinner"></div></div>';
         });
@@ -684,7 +496,7 @@ app.get('/', (req, res) => {
             messageDiv.innerHTML = \`
                 <div class="message-from">📱 From: +\${escapeHtml(shortFrom)}</div>
                 <div class="message-text"><strong>💬 Message:</strong> \${escapeHtml(data.body)}</div>
-                <div class="message-response"><strong>🤖 Bot Response:</strong><br>\${escapeHtml(data.response).replace(/\\n/g, '<br>')}</div>
+                <div class="message-response"><strong>🤖 Response:</strong><br>\${escapeHtml(data.response).replace(/\\n/g, '<br>')}</div>
                 <div class="message-time">🕐 \${timestamp}</div>
             \`;
             messageList.insertBefore(messageDiv, messageList.firstChild);
@@ -709,7 +521,7 @@ app.get('/', (req, res) => {
                 const result = await response.json();
                 if (result.success) {
                     const qrContainer = document.getElementById('qr-code');
-                    qrContainer.innerHTML = '<div class="qr-placeholder"><div class="spinner"></div><div style="margin-top: 10px; font-size: 12px;">Generating new QR...</div></div>';
+                    qrContainer.innerHTML = '<div class="qr-placeholder"><div class="spinner"></div><div style="margin-top: 10px; font-size: 12px;">Generating...</div></div>';
                     const statusDiv = document.getElementById('status');
                     statusDiv.className = 'status scanning';
                     statusDiv.innerHTML = '🔄 New QR requested - Please scan';
@@ -721,12 +533,12 @@ app.get('/', (req, res) => {
             }
             finally { 
                 btn.disabled = false; 
-                btn.textContent = '🔄 New QR Code'; 
+                btn.textContent = '🔄 New QR'; 
             }
         }
         
         async function logout() {
-            if (!confirm('⚠️ Are you sure you want to disconnect? The session will be cleared.')) return;
+            if (!confirm('⚠️ Disconnect? Session will be cleared.')) return;
             const btn = event.target;
             btn.disabled = true;
             btn.textContent = 'Disconnecting...';
@@ -734,7 +546,7 @@ app.get('/', (req, res) => {
                 await fetch('/api/logout', { method: 'POST' });
                 const statusDiv = document.getElementById('status');
                 statusDiv.className = 'status disconnected';
-                statusDiv.innerHTML = '❌ Disconnected - Session cleared';
+                statusDiv.innerHTML = '❌ Disconnected';
                 const qrContainer = document.getElementById('qr-code');
                 qrContainer.innerHTML = '<div class="qr-placeholder"><div class="spinner"></div></div>';
             } catch (error) { 
@@ -754,7 +566,7 @@ app.get('/', (req, res) => {
                     const statusDiv = document.getElementById('status');
                     if (statusDiv.classList.contains('disconnected')) {
                         statusDiv.className = 'status connected';
-                        statusDiv.innerHTML = '✅ Connected - Bot is ready to respond!';
+                        statusDiv.innerHTML = '✅ Connected - Bot is ready!';
                     }
                 }
             } catch (error) { 
@@ -773,7 +585,6 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\n🚀 Server: http://localhost:${PORT}`);
   console.log(`💾 Auth: ${supabase ? 'Supabase' : 'Local'}`);
-  console.log(`🤖 AI: ${process.env.API ? 'ENABLED' : 'DISABLED'}`);
   console.log(`📱 Bot starting...\n`);
 });
 
